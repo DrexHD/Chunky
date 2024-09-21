@@ -7,11 +7,7 @@ import net.minecraft.nbt.NbtString;
 import net.minecraft.nbt.scanner.NbtScanQuery;
 import net.minecraft.nbt.scanner.SelectiveNbtCollector;
 import net.minecraft.registry.RegistryKeys;
-import net.minecraft.server.world.ChunkHolder;
-import net.minecraft.server.world.ChunkTicketType;
-import net.minecraft.server.world.ServerChunkLoadingManager;
-import net.minecraft.server.world.ServerChunkManager;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.server.world.*;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Unit;
@@ -36,7 +32,7 @@ import java.util.function.Function;
 
 public class FabricWorld implements World {
     private static final int TICKING_LOAD_DURATION = Input.tryInteger(System.getProperty("chunky.tickingLoadDuration")).orElse(0);
-    private static final ChunkTicketType<Unit> CHUNKY = ChunkTicketType.create("chunky", (unit, unit2) -> 0);
+    protected static final ChunkTicketType<Unit> CHUNKY = ChunkTicketType.create("chunky", (unit, unit2) -> 0);
     private static final ChunkTicketType<Unit> CHUNKY_TICKING = ChunkTicketType.create("chunky_ticking", (unit, unit2) -> 0, TICKING_LOAD_DURATION * 20);
     private static final boolean UPDATE_CHUNK_NBT = Boolean.getBoolean("chunky.updateChunkNbt");
     private final ServerWorld serverWorld;
@@ -70,10 +66,11 @@ public class FabricWorld implements World {
             if (loadedChunkHolder != null && loadedChunkHolder.getLatestStatus() == ChunkStatus.FULL) {
                 return CompletableFuture.completedFuture(true);
             }
-            final ChunkHolder unloadedChunkHolder = chunkStorageMixin.getChunksToUnload().get(chunkPos.toLong());
-            if (unloadedChunkHolder != null && unloadedChunkHolder.getLatestStatus() == ChunkStatus.FULL) {
-                return CompletableFuture.completedFuture(true);
-            }
+            // TODO Moonrise doesn't have this
+//            final ChunkHolder unloadedChunkHolder = chunkStorageMixin.getChunksToUnload().get(chunkPos.toLong());
+//            if (unloadedChunkHolder != null && unloadedChunkHolder.getLatestStatus() == ChunkStatus.FULL) {
+//                return CompletableFuture.completedFuture(true);
+//            }
             if (UPDATE_CHUNK_NBT) {
                 return chunkStorageMixin.invokeGetUpdatedChunkNbt(chunkPos)
                         .thenApply(optionalNbt -> optionalNbt
@@ -100,17 +97,22 @@ public class FabricWorld implements World {
         if (Thread.currentThread() != serverWorld.getServer().getThread()) {
             return CompletableFuture.supplyAsync(() -> getChunkAtAsync(x, z), serverWorld.getServer()).thenCompose(Function.identity());
         } else {
+            final CompletableFuture<Void> chunkFuture;
             final ChunkPos chunkPos = new ChunkPos(x, z);
             final ServerChunkManager serverChunkManager = serverWorld.getChunkManager();
-            serverChunkManager.addTicket(CHUNKY, chunkPos, 0, Unit.INSTANCE);
-            if (TICKING_LOAD_DURATION > 0) {
-                serverChunkManager.addTicket(CHUNKY_TICKING, chunkPos, 1, Unit.INSTANCE);
+            if (Moonrise.isMoonrise()) {
+                chunkFuture = CompletableFuture.allOf(Moonrise.getChunkAtAsync(serverWorld, x, z));
+            } else {
+                serverChunkManager.addTicket(CHUNKY, chunkPos, 0, Unit.INSTANCE);
+                if (TICKING_LOAD_DURATION > 0) {
+                    serverChunkManager.addTicket(CHUNKY_TICKING, chunkPos, 1, Unit.INSTANCE);
+                }
+                ((ServerChunkManagerMixin) serverChunkManager).invokeUpdateChunks();
+                final ServerChunkLoadingManager serverChunkLoadingManager = serverChunkManager.chunkLoadingManager;
+                final ServerChunkLoadingManagerMixin serverChunkLoadingManagerMixin = (ServerChunkLoadingManagerMixin) serverChunkLoadingManager;
+                final ChunkHolder chunkHolder = serverChunkLoadingManagerMixin.invokeGetChunkHolder(chunkPos.toLong());
+                chunkFuture = chunkHolder == null ? CompletableFuture.completedFuture(null) : CompletableFuture.allOf(chunkHolder.load(ChunkStatus.FULL, serverChunkLoadingManager));
             }
-            ((ServerChunkManagerMixin) serverChunkManager).invokeUpdateChunks();
-            final ServerChunkLoadingManager serverChunkLoadingManager = serverChunkManager.chunkLoadingManager;
-            final ServerChunkLoadingManagerMixin serverChunkLoadingManagerMixin = (ServerChunkLoadingManagerMixin) serverChunkLoadingManager;
-            final ChunkHolder chunkHolder = serverChunkLoadingManagerMixin.invokeGetChunkHolder(chunkPos.toLong());
-            final CompletableFuture<Void> chunkFuture = chunkHolder == null ? CompletableFuture.completedFuture(null) : CompletableFuture.allOf(chunkHolder.load(ChunkStatus.FULL, serverChunkLoadingManager));
             chunkFuture.whenCompleteAsync((ignored, throwable) -> serverChunkManager.removeTicket(CHUNKY, chunkPos, 0, Unit.INSTANCE), serverWorld.getServer());
             return chunkFuture;
         }

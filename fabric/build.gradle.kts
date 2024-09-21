@@ -1,15 +1,20 @@
 plugins {
-    id("dev.architectury.loom") version "1.6-SNAPSHOT"
+    id("dev.architectury.loom") version "1.7-SNAPSHOT"
 }
 
 val shade: Configuration by configurations.creating
 
+repositories {
+    maven("https://api.modrinth.com/maven")
+}
+
 dependencies {
-    minecraft(group = "com.mojang", name = "minecraft", version = "1.21")
-    mappings(group = "net.fabricmc", name = "yarn", version = "1.21+build.2", classifier = "v2")
-    modImplementation(group = "net.fabricmc", name = "fabric-loader", version = "0.15.11")
-    modImplementation(group = "net.fabricmc.fabric-api", name = "fabric-api", version = "0.100.1+1.21")
-    modCompileOnly(group = "me.lucko", name = "fabric-permissions-api", version = "0.2-SNAPSHOT")
+    minecraft(group = "com.mojang", name = "minecraft", version = "1.21.1")
+    mappings(group = "net.fabricmc", name = "yarn", version = "1.21.1+build.3", classifier = "v2")
+    modImplementation(group = "net.fabricmc", name = "fabric-loader", version = "0.16.5")
+    modImplementation(group = "net.fabricmc.fabric-api", name = "fabric-api", version = "0.104.0+1.21.1")
+    modImplementation (group = "maven.modrinth", name = "moonrise-opt", version = "0.1.0-beta.3+23eddfe")
+    modCompileOnly(group = "me.lucko", name = "fabric-permissions-api", version = "0.3.1")
     implementation(project(":chunky-common"))
     shade(project(":chunky-common"))
 }

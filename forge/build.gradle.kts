@@ -1,13 +1,13 @@
 plugins {
-    id("dev.architectury.loom") version "1.6-SNAPSHOT"
+    id("dev.architectury.loom") version "1.7-SNAPSHOT"
 }
 
 val shade: Configuration by configurations.creating
 
 dependencies {
-    minecraft(group = "com.mojang", name = "minecraft", version = "1.21")
+    minecraft(group = "com.mojang", name = "minecraft", version = "1.21.1")
     mappings(loom.officialMojangMappings())
-    forge(group = "net.minecraftforge", name = "forge", version = "1.21-51.0.8")
+    forge(group = "net.minecraftforge", name = "forge", version = "1.21.1-52.0.16")
     implementation(project(":chunky-common"))
     shade(project(":chunky-common"))
 }
